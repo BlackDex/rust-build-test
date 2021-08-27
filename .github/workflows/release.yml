@@ -42,7 +42,7 @@ jobs:
     if: ${{ needs.skip_check.outputs.should_skip != 'true' }}
     env:
       DOCKER_BUILDKIT: 1
-      # DOCKER_REPO needs to be 'index.docker.io/<user>/<repo>'
+      # DOCKER_REPO/secrets.DOCKERHUB_REPO needs to be 'index.docker.io/<user>/<repo>'
       DOCKER_REPO: ${{ secrets.DOCKERHUB_REPO }}
       SOURCE_COMMIT: ${{ github.sha }}
       SOURCE_REPOSITORY_URL: "https://github.com/${{ github.repository }}"
