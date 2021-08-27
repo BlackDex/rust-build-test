@@ -9,9 +9,11 @@ on:
 
 jobs:
   # https://github.com/marketplace/actions/skip-duplicate-actions
-  # Some checks to determine if we need to continue with building a new docker
+  # Some checks to determine if we need to continue with building a new docker.
+  # We will skip this check if we are creating a tag, because that has the same hash as a previous run already.
   skip_check:
     runs-on: ubuntu-latest
+    if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
