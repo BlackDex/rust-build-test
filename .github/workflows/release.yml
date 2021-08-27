@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '**'
+
+jobs:
+  # https://github.com/marketplace/actions/skip-duplicate-actions
+  # Some checks to determine if we need to continue with building a new docker
+  skip_check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - name: Skip Duplicates Actions
+        id: skip_check
+        uses: fkirc/skip-duplicate-actions@master
+        with:
+          cancel_others: 'true'
+          paths: '["src/**", "migrations/**", "Cargo.*", "diesel.toml", "rust-toolchain", "docker/**", "hooks/**", ".github/workflows/release.yml"]'
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: skip_check
+    if: ${{ needs.skip_check.outputs.should_skip != 'true' && github.repository == 'BlackDex/rust-build-test' }}
+    env:
+      DOCKER_BUILDKIT: 1
+      # DOCKER_REPO needs to be 'index.docker.io/<user>/<repo>'
+      DOCKER_REPO: ${{ secrets.DOCKERHUB_REPO }}
+      SOURCE_COMMIT: ${{ github.sha }}
+      SOURCE_REPOSITORY_URL: "https://github.com/${{ github.repository }}"
+    steps:
+      # Checkout the repo
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      # Login to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Determine Docker Tag
+      - name: Init Variables
+        id: vars
+        shell: bash
+        run: |
+          # Check which main tag we are going to build determined by github.ref
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo 'set-output name=DOCKER_TAG::latest'
+            echo ::set-output name=DOCKER_TAG::latest
+          elif [[ "${{ github.ref }}" == refs/heads/* ]]; then
+            echo 'set-output name=DOCKER_TAG::testing'
+            echo ::set-output name=DOCKER_TAG::testing
+          fi
+      # End Determine Docker Tag
+
+      - name: Build Debian based images
+        shell: bash
+        env:
+          DOCKER_TAG: ${{steps.vars.outputs.DOCKER_TAG}}
+        run: |
+          ./hooks/build
+
+      - name: Push Debian based images
+        shell: bash
+        env:
+          DOCKER_TAG: ${{steps.vars.outputs.DOCKER_TAG}}
+        run: |
+          ./hooks/push
+
+      - name: Build Alpine based images
+        shell: bash
+        env:
+          DOCKER_TAG: "${{steps.vars.outputs.DOCKER_TAG}}-alpine"
+        run: |
+          ./hooks/build
+
+      - name: Push Alpine based images
+        shell: bash
+        env:
+          DOCKER_TAG: "${{steps.vars.outputs.DOCKER_TAG}}-alpine"
+        run: |
+          ./hooks/push
